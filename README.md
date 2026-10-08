@@ -1,36 +1,40 @@
 # BUYME Wallet Total v0.2 (prototype)
 
-תוסף Chrome/Edge, Manifest V3, המסכם מקומית את **היתרות הנוכחיות** של שוברי BUYME שכבר מופיעים בעמוד הארנק.
+A Chrome/Edge extension (Manifest V3) that locally sums the **current balances** of the BUYME gift cards already shown on your wallet page.
 
-## התקנה
+## Installation
 
-1. חלץ את קובץ ה-ZIP לתיקייה.
-2. פתח `chrome://extensions` (או `edge://extensions`).
-3. הפעל **Developer mode / מצב מפתח**.
-4. לחץ **Load unpacked / טעינת תוסף שלא נארז** ובחר את התיקייה שחילצת (`buyme-wallet-total`).
-5. פתח או רענן את `https://buyme.co.il/myAccount/wallet?status=1`.
-6. בתחתית המסך יופיע כרטיס עם הסכום הכולל וכפתור **פירוט**.
+1. Extract the ZIP file to a folder.
+2. Open `chrome://extensions` (or `edge://extensions`).
+3. Turn on **Developer mode**.
+4. Click **Load unpacked** and select the extracted folder (`buyme-wallet-total`).
+5. Open or refresh `https://buyme.co.il/myAccount/wallet?status=1`.
+6. A card with the total amount and a **פירוט** (details) button appears at the bottom of the screen.
 
-## מה נספר?
+## What gets counted?
 
-- התוסף מזהה את המבנה המדויק של שורת `יתרה למימוש`: הערך ב-`<b>` הוא היתרה הנוכחית, והערך ב-`gifts-table__original-text` הוא הסכום המקורי.
-- לא נאספים סכומים ללא שורה מזוהה, כדי להימנע מספירה של מחיר, שם שובר או סכומים כפולים.
-- מתנות שטרם נטענו באמצעות גלילה/דפדוף **אינן נספרות**.
-- כרטיסים עם שורה שאי אפשר לפענח מדווחים כאזהרה ולא מנוחשים.
-- אם טרם נטענה הרשימה, יופיע סימון `—`.
+- The extension recognizes the exact structure of the `יתרה למימוש` ("balance to redeem") row: the value in `<b>` is the current balance, and the value in `gifts-table__original-text` is the original amount.
+- No amounts are collected outside a recognized row, to avoid counting prices, gift names, or duplicate amounts.
+- Gifts that have not yet been loaded by scrolling/paging **are not counted**.
+- Cards whose row cannot be parsed are reported as a warning instead of being guessed.
+- If the list has not loaded yet, `—` is shown.
 
-## פרטיות והרשאות
+## Currency
 
-- התוסף אינו מבקש `cookies`, `storage`, `tabs` או הרשאות גישה לשרתים חיצוניים.
-- הוא אינו משנה את נתוני BUYME, ואינו מבצע קריאות רשת.
-- רק טקסט שכבר נמצא בעמוד החשבון משמש לחישוב.
+Only Israeli shekels (₪) are supported. Amounts must use the Israeli number format: optional comma thousands separators and a dot decimal point with up to two agorot digits (for example `₪1,234.50`). Anything else is rejected rather than guessed.
 
-## מגבלות גרסה 0.2
+## Privacy and permissions
 
-1. זיהוי היתרה מבוסס על HTML אמיתי של שורת המתנה שנמסר על ידי המשתמש (`span.gifts-table__text--gray`, `b`, `span.gifts-table__original-text`), אך עדיין לא נבדק בתוך חשבון BUYME חי.
-2. יש לאמת בחשבון חי מתנה שמומשה חלקית. לפי מבנה ה-HTML, הערך המודגש (`b`) הוא היתרה הנוכחית, והטקסט `gifts-table__original-text` הוא הערך המקורי.
-3. סיכום כל המתנות בחשבון (כולל דפים שלא נטענו) יצריך לגלול/לפתוח את כולן, או לפתח אסטרטגיה אחרת אחרי בדיקת האתר.
+- The extension does not request `cookies`, `storage`, `tabs`, or access to external servers.
+- It does not modify BUYME data and makes no network calls.
+- Only text already present on the account page is used for the calculation.
 
-## בדיקות
+## Limitations of v0.2
 
-הרץ `node --test tests/parser.test.js` בתוך תיקיית התוסף.
+1. Balance detection is based on real gift-row HTML supplied by the user (`span.gifts-table__text--gray`, `b`, `span.gifts-table__original-text`), but has not yet been tested inside a live BUYME account.
+2. A partially redeemed gift still needs to be verified in a live account. Based on the HTML structure, the bold value (`b`) is the current balance, and the `gifts-table__original-text` text is the original value.
+3. Summing every gift in the account (including pages that have not loaded) would require scrolling/opening all of them, or a different strategy after examining the site.
+
+## Tests
+
+Run `node --test tests/parser.test.js` inside the extension folder.

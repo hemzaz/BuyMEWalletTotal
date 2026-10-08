@@ -8,7 +8,7 @@
   const UI_ID = 'buyme-wallet-total-ext';
   const WALLET_PATH = /\/myaccount\/wallet\/?$/i;
   let host = null;
-  let shadow = null;
+  let ui = null;
   let scheduled = null;
   let expanded = false;
   let lastSignature = '';
@@ -28,6 +28,7 @@
   function scanBalances() {
     const found = [];
     const usedRows = new Set();
+    const labelEls = [];
     let labels = 0;
 
     // Uses the concrete BUYME markup, rather than searching arbitrary text
@@ -35,9 +36,10 @@
     const nodes = document.querySelectorAll('span.gifts-table__text.gifts-table__text--gray');
     for (const label of nodes) {
       if (!isVisible(label)) continue;
-      const name = (label.textContent || '').replace(/[\u200e\u200f\u061c]/g, '').trim().replace(/[:：]$/, '').trim();
+      const name = parser.normalize(label.textContent).replace(/[:：]$/, '').trim();
       if (name !== parser.LABEL) continue;
       labels++;
+      labelEls.push(label);
 
       const row = label.parentElement;
       if (!row || row.tagName !== 'P' || usedRows.has(row)) continue;
@@ -51,7 +53,46 @@
       if (balance) found.push({ element: row, ...balance });
     }
 
-    return { balances: found, labels };
+    const giftRows = findGiftRows(labelEls);
+    return {
+      balances: found,
+      labels,
+      giftRows: giftRows ? giftRows.rows : null,
+      rowsWithLabel: giftRows ? giftRows.withLabel : 0,
+      headerCount: findHeaderCount()
+    };
+  }
+
+  // Derives the gift list from the balance labels instead of hard-coding its markup:
+  // the list is the closest common ancestor of all labels, and a gift row is a child of
+  // it shaped like the rows that hold a label. Rows without a label are non-cash gifts
+  // (e.g. a cinema voucher). Needs at least two labels to tell the list apart from a row.
+  function findGiftRows(labelEls) {
+    if (labelEls.length < 2) return null;
+    let list = labelEls[0].parentElement;
+    while (list && !labelEls.every(l => list.contains(l))) list = list.parentElement;
+    if (!list || list === document.body || list === document.documentElement) return null;
+
+    const rowOf = el => { while (el.parentElement !== list) el = el.parentElement; return el; };
+    const labelled = new Set(labelEls.map(rowOf));
+    if (labelled.size !== labelEls.length) return null;  // one row with two labels: ambiguous
+    const shape = el => `${el.tagName}.${el.className}`;
+    const shapes = new Set([...labelled].map(shape));
+    const rows = [...list.children].filter(el => shapes.has(shape(el)) && isVisible(el));
+    return { rows, withLabel: labelled.size };
+  }
+
+  // Finds the "N מתנות שאפשר לממש" heading by its text; ignored unless exactly one count is found.
+  function findHeaderCount() {
+    const counts = new Set();
+    for (const el of document.body.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"],div,span,p,strong')) {
+      if (el.childElementCount > 3) continue;
+      const text = el.textContent || '';
+      if (text.length > 60 || !text.includes('לממש')) continue;
+      const count = parser.parseGiftCountHeading(text);
+      if (count !== null && isVisible(el)) counts.add(count);
+    }
+    return counts.size === 1 ? [...counts][0] : null;
   }
 
   function ensureUI() {
@@ -59,7 +100,7 @@
     host = document.createElement('div');
     host.id = UI_ID;
     host.setAttribute('aria-label', 'BUYME Wallet Total');
-    shadow = host.attachShadow({ mode: 'closed' });
+    const shadow = host.attachShadow({ mode: 'closed' });
     shadow.innerHTML = `
       <style>
         :host { all: initial; position: fixed; z-index: 2147483000; bottom: 18px; left: 18px;
@@ -93,56 +134,78 @@
           <button id="hide" type="button" title="מזער">−</button>
         </div></div>
         <div id="body"><div class="money" id="total">—</div><div class="sub" id="count">מחשב…</div>
+          <div class="sub" id="info" hidden></div>
           <div class="warning" id="warning" hidden></div>
           <div class="detail" id="detail" hidden><strong>יתרות לפי כרטיס</strong><div class="amounts" id="amounts"></div></div>
           <div class="footnote">נספרות רק מתנות שנטענו בעמוד זה. אין שליחת נתונים.</div>
         </div>
       </section>`;
     document.body.appendChild(host);
-    shadow.querySelector('#details').addEventListener('click', () => {
+    const $ = id => shadow.getElementById(id);
+    ui = { total: $('total'), count: $('count'), info: $('info'), warning: $('warning'), amounts: $('amounts') };
+    const details = $('details');
+    const detail = $('detail');
+    const hide = $('hide');
+    const body = $('body');
+    detail.hidden = !expanded;
+    details.setAttribute('aria-expanded', String(expanded));
+    details.addEventListener('click', () => {
       expanded = !expanded;
-      shadow.querySelector('#detail').hidden = !expanded;
-      shadow.querySelector('#details').setAttribute('aria-expanded', String(expanded));
+      detail.hidden = !expanded;
+      details.setAttribute('aria-expanded', String(expanded));
     });
-    shadow.querySelector('#hide').addEventListener('click', () => {
-      const body = shadow.querySelector('#body');
+    hide.addEventListener('click', () => {
       body.hidden = !body.hidden;
-      shadow.querySelector('#hide').textContent = body.hidden ? '+' : '−';
-      shadow.querySelector('#hide').title = body.hidden ? 'הרחב' : 'מזער';
+      hide.textContent = body.hidden ? '+' : '−';
+      hide.title = body.hidden ? 'הרחב' : 'מזער';
     });
     lastSignature = '';
   }
 
-  function render({ balances, labels }) {
+  function render({ balances, labels, giftRows, rowsWithLabel, headerCount }) {
     ensureUI();
     const total = balances.reduce((sum, item) => sum + item.remaining, 0);
-    const signature = `${total}/${labels}/${balances.map(b => b.remaining).join(',')}`;
+    const signature = [total, labels, giftRows?.length, rowsWithLabel, headerCount,
+      balances.map(b => b.remaining).join(',')].join('/');
     if (signature === lastSignature) return;
     lastSignature = signature;
-    shadow.querySelector('#total').textContent = balances.length ? parser.formatAgorot(total) : '—';
-    shadow.querySelector('#count').textContent = balances.length
-      ? `${balances.length} מתנות עם יתרה מזוהה`
+    ui.total.textContent = balances.length ? parser.formatAgorot(total) : '—';
+    ui.count.textContent = balances.length
+      ? `${balances.length} מתנות עם יתרה מזוהה${headerCount ? ` מתוך ${headerCount}` : ''}`
       : 'טרם נמצאו מתנות עם יתרה כספית';
+
+    const nonCash = giftRows ? giftRows.length - rowsWithLabel : 0;
+    ui.info.hidden = nonCash <= 0;
+    ui.info.textContent = nonCash === 1
+      ? 'מתנה אחת ללא יתרה כספית (לא נספרת)'
+      : `${nonCash} מתנות ללא יתרה כספית (לא נספרות)`;
+
+    const warnings = [];
     const missing = Math.max(0, labels - balances.length);
-    const warning = shadow.querySelector('#warning');
-    warning.hidden = !missing && !!balances.length;
-    warning.textContent = missing
-      ? `${missing} שורות יתרה לא פוענחו. הסכום עשוי להיות חלקי.`
-      : 'לא זוהו שורות יתרה. ייתכן שהרשימה עדיין נטענת או שהאתר השתנה.';
-    const amounts = shadow.querySelector('#amounts');
-    amounts.replaceChildren();
-    for (const item of balances) {
+    if (missing) warnings.push(`${missing} שורות יתרה לא פוענחו. הסכום עשוי להיות חלקי.`);
+    else if (!balances.length) warnings.push('לא זוהו שורות יתרה. ייתכן שהרשימה עדיין נטענת או שהאתר השתנה.');
+    if (headerCount !== null) {
+      const unseen = headerCount - (giftRows ? giftRows.length : labels);
+      if (unseen > 0) {
+        warnings.push(giftRows
+          ? `${unseen} מתנות טרם נטענו. גללו למטה כדי לכלול אותן.`
+          : `${unseen} מתנות לא נספרו (ללא יתרה כספית או שטרם נטענו).`);
+      }
+    }
+    ui.warning.hidden = !warnings.length;
+    ui.warning.textContent = warnings.join(' ');
+    ui.amounts.replaceChildren(...balances.map(item => {
       const chip = document.createElement('span');
       chip.textContent = parser.formatAgorot(item.remaining);
-      amounts.appendChild(chip);
-    }
+      return chip;
+    }));
   }
 
   function update() {
     scheduled = null;
     if (!onWallet()) {
       if (host) host.remove();
-      host = shadow = null;
+      host = ui = null;
       lastSignature = '';
       return;
     }
@@ -154,14 +217,11 @@
     scheduled = setTimeout(update, 200);
   }
 
+  // The panel lives in a closed shadow root, so its internal updates never reach this
+  // observer; only inserting or removing the host element itself needs to be ignored.
   function ownMutation(mutation) {
-    const target = mutation.target.nodeType === Node.ELEMENT_NODE
-      ? mutation.target : mutation.target.parentElement;
-    if (target?.closest?.(`#${UI_ID}`)) return true;
-    const added = [...(mutation.addedNodes || [])];
-    const removed = [...(mutation.removedNodes || [])];
-    return added.concat(removed).length > 0 &&
-      added.concat(removed).every(n => n === host || n.parentElement?.closest?.(`#${UI_ID}`));
+    const nodes = [...mutation.addedNodes, ...mutation.removedNodes];
+    return nodes.length > 0 && nodes.every(n => n.id === UI_ID);
   }
 
   const observer = new MutationObserver(mutations => {
