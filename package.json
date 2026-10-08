@@ -1,0 +1,13 @@
+{
+  "name": "buyme-wallet-total",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Chrome/Edge extension that locally sums BUYME wallet gift balances.",
+  "scripts": {
+    "test": "node --test tests/",
+    "pack": "npm test && mkdir -p dist && rm -f dist/buyme-wallet-total-v$npm_package_version.zip && zip -X dist/buyme-wallet-total-v$npm_package_version.zip manifest.json parser.js content.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

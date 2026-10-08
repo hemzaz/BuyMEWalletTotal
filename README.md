@@ -4,12 +4,16 @@ A Chrome/Edge extension (Manifest V3) that locally sums the **current balances**
 
 ## Installation
 
-1. Extract the ZIP file to a folder.
+1. Get the extension files, either way:
+   - **From source:** `git clone git@github.com:hemzaz/BuyMEWalletTotal.git`
+   - **From a release ZIP:** extract `buyme-wallet-total-v<version>.zip` to a folder.
 2. Open `chrome://extensions` (or `edge://extensions`).
 3. Turn on **Developer mode**.
-4. Click **Load unpacked** and select the extracted folder (`buyme-wallet-total`).
+4. Click **Load unpacked** and select the folder that contains `manifest.json` (the cloned repo or the extracted ZIP folder).
 5. Open or refresh `https://buyme.co.il/myAccount/wallet?status=1`.
 6. A card with the total amount and a **פירוט** (details) button appears at the bottom of the screen.
+
+After pulling new changes, click the reload icon on the extension's card in `chrome://extensions` and refresh the BUYME tab.
 
 ## What gets counted?
 
@@ -35,6 +39,13 @@ Only Israeli shekels (₪) are supported. Amounts must use the Israeli number fo
 2. A partially redeemed gift still needs to be verified in a live account. Based on the HTML structure, the bold value (`b`) is the current balance, and the `gifts-table__original-text` text is the original value.
 3. Summing every gift in the account (including pages that have not loaded) would require scrolling/opening all of them, or a different strategy after examining the site.
 
-## Tests
+## Development
 
-Run `node --test tests/parser.test.js` inside the extension folder.
+No dependencies or build step are required; Node.js 18+ is only needed for tests and packaging.
+
+| Command | What it does |
+|---|---|
+| `npm test` | Runs all tests in `tests/` with the built-in Node test runner. |
+| `npm run pack` | Runs the tests, then writes `dist/buyme-wallet-total-v<version>.zip` containing only the extension files (`manifest.json`, `parser.js`, `content.js`). |
+
+When bumping the version, update it in both `manifest.json` and `package.json`; a test fails if they differ.
