@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "BUYME Wallet Total",
+  "version": "0.2.0",
+  "description": "מסכם את יתרות המתנות שמופיעות בארנק BUYME, מקומית בדפדפן.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://buyme.co.il/myAccount/*",
+        "https://www.buyme.co.il/myAccount/*"
+      ],
+      "js": [
+        "parser.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
